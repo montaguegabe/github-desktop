@@ -37,7 +37,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         if (!targetDir) {
           vscode.window.showErrorMessage(
-            "No .cursorrules directory found in parent directories"
+            "No .cursor/rules directory found in parent directories"
           );
           return;
         }
@@ -89,14 +89,14 @@ function findNearestCursorRulesDirectory(startPath: string): string | null {
   const root = path.parse(currentDir).root;
 
   while (currentDir !== root) {
-    const cursorRulesPath = path.join(currentDir, ".cursorrules");
+    const cursorRulesPath = path.join(currentDir, ".cursor", "rules");
     if (fs.existsSync(cursorRulesPath) && fs.statSync(cursorRulesPath).isDirectory()) {
       return cursorRulesPath;
     }
     currentDir = path.dirname(currentDir);
   }
 
-  const rootCursorRulesPath = path.join(root, ".cursorrules");
+  const rootCursorRulesPath = path.join(root, ".cursor", "rules");
   if (fs.existsSync(rootCursorRulesPath) && fs.statSync(rootCursorRulesPath).isDirectory()) {
     return rootCursorRulesPath;
   }
