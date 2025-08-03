@@ -1,7 +1,7 @@
 {
-  "name": "github-desktop",
-  "displayName": "GitHub Desktop",
-  "description": "Quickly open the right repo in GitHub Desktop from VS Code",
+  "name": "cursor-rules-management",
+  "displayName": "Cursor Rules Management",
+  "description": "Share and manage Cursor rules across projects",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.99.0"
@@ -14,10 +14,21 @@
   "contributes": {
     "commands": [
       {
-        "command": "github-desktop.openInGitHubDesktop",
-        "title": "Open in GitHub Desktop"
+        "command": "cursor-rules.importRule",
+        "title": "Import Cursor Rule"
       }
-    ]
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Cursor Rules Management",
+      "properties": {
+        "cursorRules.sharedRulesDirectory": {
+          "type": "string",
+          "default": "~/.cursor-rules",
+          "description": "Directory where shared Cursor rules are stored"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -26,7 +37,7 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test",
-    "install-extension": "vsce package --allow-missing-repository && cursor --install-extension github-desktop-0.0.1.vsix"
+    "install-extension": "vsce package --allow-missing-repository && cursor --install-extension cursor-rules-management-0.0.1.vsix"
   },
   "devDependencies": {
     "@types/vscode": "^1.99.0",

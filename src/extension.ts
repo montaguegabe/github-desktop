@@ -1,61 +1,115 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
-import { exec } from "child_process";
-import * as path from "path";
 import * as vscode from "vscode";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-  // Use the console to output diagnostic information (console.log) and errors (console.error)
-  // This line of code will only be executed once when your extension is activated
-  console.log(
-    'Congratulations, your extension "github-desktop" is now active!'
-  );
+  const importRuleCommand = vscode.commands.registerCommand(
+    "cursor-rules.importRule",
+    async () => {
+      try {
+        const sharedRulesDir = getSharedRulesDirectory();
+        const rules = await getAvailableRules(sharedRulesDir);
 
-  // The command has been defined in the package.json file
-  // Now provide the implementation of the command with registerCommand
-  // The commandId parameter must match the command field in package.json
-  const disposable = vscode.commands.registerCommand(
-    "github-desktop.openInGitHubDesktop",
-    () => {
-      // Get the active editor
-      const activeEditor = vscode.window.activeTextEditor;
-
-      if (!activeEditor) {
-        vscode.window.showErrorMessage("No active file open");
-        return;
-      }
-
-      // Get the full path of the active file
-      const activeFilePath = activeEditor.document.uri.fsPath;
-
-      // Get the directory containing the current file
-      const activeFileDirectory = path.dirname(activeFilePath);
-
-      // Run the github command with the directory path
-      const command = `github "${activeFileDirectory}"`;
-
-      exec(command, (error, stdout, stderr) => {
-        if (error) {
-          vscode.window.showErrorMessage(
-            `Failed to run GitHub Desktop: ${error.message}`
+        if (rules.length === 0) {
+          vscode.window.showInformationMessage(
+            `No rules found in ${sharedRulesDir}`
           );
           return;
         }
 
-        if (stderr) {
-          vscode.window.showWarningMessage(`GitHub Desktop warning: ${stderr}`);
+        const selectedRule = await vscode.window.showQuickPick(rules, {
+          placeHolder: "Select a rule to import",
+        });
+
+        if (!selectedRule) {
+          return;
         }
 
-        // Show success message
-        vscode.window.showInformationMessage("Opened in GitHub Desktop");
-      });
+        const activeEditor = vscode.window.activeTextEditor;
+        if (!activeEditor) {
+          vscode.window.showErrorMessage("No active editor found");
+          return;
+        }
+
+        const currentFilePath = activeEditor.document.uri.fsPath;
+        const targetDir = findNearestCursorRulesDirectory(currentFilePath);
+
+        if (!targetDir) {
+          vscode.window.showErrorMessage(
+            "No .cursorrules directory found in parent directories"
+          );
+          return;
+        }
+
+        const sourcePath = path.join(sharedRulesDir, selectedRule);
+        const targetPath = path.join(targetDir, selectedRule);
+
+        await copyFile(sourcePath, targetPath);
+        vscode.window.showInformationMessage(
+          `Rule "${selectedRule}" imported to ${targetDir}`
+        );
+      } catch (error) {
+        vscode.window.showErrorMessage(
+          `Failed to import rule: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
     }
   );
 
-  context.subscriptions.push(disposable);
+  context.subscriptions.push(importRuleCommand);
 }
 
-// This method is called when your extension is deactivated
+function getSharedRulesDirectory(): string {
+  const config = vscode.workspace.getConfiguration("cursorRules");
+  const configuredPath = config.get<string>("sharedRulesDirectory") || "~/.cursor-rules";
+  return configuredPath.replace("~", os.homedir());
+}
+
+async function getAvailableRules(directory: string): Promise<string[]> {
+  try {
+    if (!fs.existsSync(directory)) {
+      fs.mkdirSync(directory, { recursive: true });
+      return [];
+    }
+
+    const files = await fs.promises.readdir(directory);
+    return files.filter((file) => {
+      const filePath = path.join(directory, file);
+      return fs.statSync(filePath).isFile();
+    });
+  } catch (error) {
+    console.error("Error reading rules directory:", error);
+    return [];
+  }
+}
+
+function findNearestCursorRulesDirectory(startPath: string): string | null {
+  let currentDir = path.dirname(startPath);
+  const root = path.parse(currentDir).root;
+
+  while (currentDir !== root) {
+    const cursorRulesPath = path.join(currentDir, ".cursorrules");
+    if (fs.existsSync(cursorRulesPath) && fs.statSync(cursorRulesPath).isDirectory()) {
+      return cursorRulesPath;
+    }
+    currentDir = path.dirname(currentDir);
+  }
+
+  const rootCursorRulesPath = path.join(root, ".cursorrules");
+  if (fs.existsSync(rootCursorRulesPath) && fs.statSync(rootCursorRulesPath).isDirectory()) {
+    return rootCursorRulesPath;
+  }
+
+  return null;
+}
+
+async function copyFile(source: string, destination: string): Promise<void> {
+  const destDir = path.dirname(destination);
+  if (!fs.existsSync(destDir)) {
+    await fs.promises.mkdir(destDir, { recursive: true });
+  }
+  await fs.promises.copyFile(source, destination);
+}
+
 export function deactivate() {}
