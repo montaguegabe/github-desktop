@@ -3,7 +3,14 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
+// Create output channel for debugging
+const outputChannel = vscode.window.createOutputChannel("Cursor Rules Management");
+
 export function activate(context: vscode.ExtensionContext) {
+  outputChannel.show(true); // Show the output channel immediately
+  outputChannel.appendLine("Extension activated");
+  outputChannel.appendLine(`Activation time: ${new Date().toISOString()}`);
+  
   // Set up file watcher for .mdc files in .cursor/rules directories
   const fileWatcher = vscode.workspace.createFileSystemWatcher(
     "**/.cursor/rules/*.mdc",
@@ -12,15 +19,20 @@ export function activate(context: vscode.ExtensionContext) {
     true   // Ignore delete events
   );
 
+  outputChannel.appendLine("File watcher created for **/.cursor/rules/*.mdc");
+
   fileWatcher.onDidCreate(async (uri) => {
+    outputChannel.appendLine(`File created: ${uri.fsPath}`);
     await syncRuleToShared(uri);
   });
 
   fileWatcher.onDidChange(async (uri) => {
+    outputChannel.appendLine(`File changed: ${uri.fsPath}`);
     await syncRuleToShared(uri);
   });
 
   context.subscriptions.push(fileWatcher);
+  context.subscriptions.push(outputChannel);
 
   const importRuleCommand = vscode.commands.registerCommand(
     "cursor-rules.importRule",
@@ -76,12 +88,24 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(importRuleCommand);
+
+  // Add command to show debug output
+  const showOutputCommand = vscode.commands.registerCommand(
+    "cursor-rules.showOutput",
+    () => {
+      outputChannel.show();
+    }
+  );
+  
+  context.subscriptions.push(showOutputCommand);
 }
 
 function getSharedRulesDirectory(): string {
   const config = vscode.workspace.getConfiguration("cursorRules");
   const configuredPath = config.get<string>("sharedRulesDirectory") || "~/.cursor-rules";
-  return configuredPath.replace("~", os.homedir());
+  const resolvedPath = configuredPath.replace("~", os.homedir());
+  outputChannel.appendLine(`Configured path: ${configuredPath}, Resolved path: ${resolvedPath}`);
+  return resolvedPath;
 }
 
 async function getAvailableRules(directory: string): Promise<string[]> {
@@ -132,24 +156,48 @@ async function copyFile(source: string, destination: string): Promise<void> {
 
 async function syncRuleToShared(uri: vscode.Uri): Promise<void> {
   try {
+    outputChannel.appendLine(`Starting sync for: ${uri.fsPath}`);
+    
     const fileName = path.basename(uri.fsPath);
+    outputChannel.appendLine(`File name: ${fileName}`);
+    
     const sharedRulesDir = getSharedRulesDirectory();
+    outputChannel.appendLine(`Shared rules directory: ${sharedRulesDir}`);
+    
     const targetPath = path.join(sharedRulesDir, fileName);
+    outputChannel.appendLine(`Target path: ${targetPath}`);
 
     // Ensure shared directory exists
     if (!fs.existsSync(sharedRulesDir)) {
+      outputChannel.appendLine(`Creating shared directory: ${sharedRulesDir}`);
       await fs.promises.mkdir(sharedRulesDir, { recursive: true });
+    } else {
+      outputChannel.appendLine(`Shared directory already exists`);
     }
 
+    // Check if source file exists
+    if (!fs.existsSync(uri.fsPath)) {
+      outputChannel.appendLine(`ERROR: Source file does not exist: ${uri.fsPath}`);
+      throw new Error(`Source file does not exist: ${uri.fsPath}`);
+    }
+
+    outputChannel.appendLine(`Copying file from ${uri.fsPath} to ${targetPath}`);
+    
     // Copy the file to shared directory
     await fs.promises.copyFile(uri.fsPath, targetPath);
+    
+    outputChannel.appendLine(`File copied successfully`);
     
     vscode.window.showInformationMessage(
       `Rule "${fileName}" synced to shared rules directory`
     );
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    outputChannel.appendLine(`ERROR: ${errorMessage}`);
+    outputChannel.appendLine(`Stack trace: ${error instanceof Error ? error.stack : 'N/A'}`);
+    
     vscode.window.showErrorMessage(
-      `Failed to sync rule: ${error instanceof Error ? error.message : String(error)}`
+      `Failed to sync rule: ${errorMessage}`
     );
   }
 }

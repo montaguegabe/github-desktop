@@ -16,6 +16,10 @@
       {
         "command": "cursor-rules.importRule",
         "title": "Import Cursor Rule"
+      },
+      {
+        "command": "cursor-rules.showOutput",
+        "title": "Show Cursor Rules Output"
       }
     ],
     "configuration": {
