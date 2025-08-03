@@ -4,6 +4,24 @@ import * as path from "path";
 import * as os from "os";
 
 export function activate(context: vscode.ExtensionContext) {
+  // Set up file watcher for .mdc files in .cursor/rules directories
+  const fileWatcher = vscode.workspace.createFileSystemWatcher(
+    "**/.cursor/rules/*.mdc",
+    false, // Don't ignore create events
+    false, // Don't ignore change events
+    true   // Ignore delete events
+  );
+
+  fileWatcher.onDidCreate(async (uri) => {
+    await syncRuleToShared(uri);
+  });
+
+  fileWatcher.onDidChange(async (uri) => {
+    await syncRuleToShared(uri);
+  });
+
+  context.subscriptions.push(fileWatcher);
+
   const importRuleCommand = vscode.commands.registerCommand(
     "cursor-rules.importRule",
     async () => {
@@ -110,6 +128,30 @@ async function copyFile(source: string, destination: string): Promise<void> {
     await fs.promises.mkdir(destDir, { recursive: true });
   }
   await fs.promises.copyFile(source, destination);
+}
+
+async function syncRuleToShared(uri: vscode.Uri): Promise<void> {
+  try {
+    const fileName = path.basename(uri.fsPath);
+    const sharedRulesDir = getSharedRulesDirectory();
+    const targetPath = path.join(sharedRulesDir, fileName);
+
+    // Ensure shared directory exists
+    if (!fs.existsSync(sharedRulesDir)) {
+      await fs.promises.mkdir(sharedRulesDir, { recursive: true });
+    }
+
+    // Copy the file to shared directory
+    await fs.promises.copyFile(uri.fsPath, targetPath);
+    
+    vscode.window.showInformationMessage(
+      `Rule "${fileName}" synced to shared rules directory`
+    );
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      `Failed to sync rule: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
 }
 
 export function deactivate() {}
